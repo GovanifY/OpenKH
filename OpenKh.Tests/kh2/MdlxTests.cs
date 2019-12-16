@@ -60,6 +60,20 @@ namespace OpenKh.Tests.kh2
         });
 
         [Fact]
+        public void ShouldWriteBackTheExactSameFile() => File.OpenRead(FileName).Using(stream =>
+        {
+            Helpers.AssertStream(stream, inStream =>
+            {
+                var mdlx = Mdlx.Read(inStream);
+
+                var outStream = new MemoryStream();
+                mdlx.Write(outStream);
+
+                return outStream;
+            });
+        });
+
+        [Fact]
         public void alb1t2() => File.OpenRead(MapFileName).Using(stream =>
         {
             var alb1t2 = Mdlx.Read(stream).MapModel.alb1t2;

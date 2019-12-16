@@ -1,4 +1,4 @@
-// Inspired by Kddf2's khkh_xldM.
+﻿// Inspired by Kddf2's khkh_xldM.
 // Original source code: https://gitlab.com/kenjiuno/khkh_xldM/blob/master/khkh_xldMii/Mdlxfst.cs
 
 using OpenKh.Common;
@@ -66,6 +66,7 @@ namespace OpenKh.Kh2
             [Data] public short Unk1e { get; set; }
 
             public SubModel SubModel { get; set; }
+            public DmaChainHeader[] DmaChains { get; internal set; }
         }
 
         private class DmaChainHeader
@@ -75,12 +76,12 @@ namespace OpenKh.Kh2
             [Data] public int Unk08 { get; set; }
             [Data] public int Unk0c { get; set; }
             [Data] public int DmaOffset { get; set; }
-            [Data] public int Unk14 { get; set; }
+            [Data] public int Count1a { get; set; }
             [Data] public int DmaLength { get; set; }
             [Data] public int Unk1c { get; set; }
         }
 
-        private static IEnumerable<SubModel> ReadAsModel(Stream stream)
+        private static IEnumerable<SubModelHeader> ReadAsModel(Stream stream)
         {
             var currentOffset = 0;
             var nextOffset = ReservedArea;
@@ -88,13 +89,14 @@ namespace OpenKh.Kh2
             {
                 currentOffset += nextOffset;
                 var subStream = new SubStream(stream, currentOffset, stream.Length - currentOffset);
-                nextOffset = ReadSubModel(subStream, out var subModel);
+                var modelHeader = ReadSubModel(subStream, out var subModel);
+                nextOffset = modelHeader.NextOffset;
 
-                yield return subModel;
+                yield return modelHeader;
             }
         }
 
-        private static int ReadSubModel(Stream stream, out SubModel subModel)
+        private static SubModelHeader ReadSubModel(Stream stream, out SubModel subModel)
         {
             var header = BinaryMapping.ReadObject<SubModelHeader>(stream);
             header.SubModel = new SubModel()
@@ -103,10 +105,10 @@ namespace OpenKh.Kh2
                 Bones = new List<Bone>(),
             };
 
-            var dmaChains = For(header.DmaChainCount, () => BinaryMapping.ReadObject<DmaChainHeader>(stream));
+            header.DmaChains = For(header.DmaChainCount, () => BinaryMapping.ReadObject<DmaChainHeader>(stream));
             for (var j = 0; j < header.DmaChainCount; j++)
             {
-                header.SubModel.DmaVifs.AddRange(ReadDmaChain(stream, dmaChains[j]));
+                header.SubModel.DmaVifs.AddRange(ReadDmaChain(stream, header.DmaChains[j]));
             }
 
             if (header.BoneOffset != 0)
@@ -117,13 +119,13 @@ namespace OpenKh.Kh2
 
             subModel = header.SubModel;
 
-            return header.NextOffset;
+            return header;
         }
 
         private static IEnumerable<DmaVif> ReadDmaChain(Stream stream, DmaChainHeader dmaChainHeader)
         {
             var dmaVifs = new List<DmaVif>();
-            var count1a = stream.SetPosition(dmaChainHeader.Unk14).ReadInt32();
+            var count1a = stream.SetPosition(dmaChainHeader.Count1a).ReadInt32();
             var alv1 = For(count1a, () => stream.ReadInt32()).ToList();
 
             var offsetDmaTag = new List<int>();
@@ -178,6 +180,12 @@ namespace OpenKh.Kh2
             return dmaVifs;
         }
 
+        private static void WriteDmaChain(Stream stream, DmaChainHeader chainHeader, DmaVif vif)
+        {
+
+        }
+
         private static Bone ReadBone(Stream stream) => BinaryMapping.ReadObject<Bone>(stream);
+        private static void WriteBone(Stream stream, Bone bone) => BinaryMapping.WriteObject(stream, bone);
     }
 }

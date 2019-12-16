@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Xe.BinaryMapper;
 using Xe.IO;
 
 namespace OpenKh.Kh2
@@ -13,11 +14,17 @@ namespace OpenKh.Kh2
         private const int Entity = 3;
         private const int ReservedArea = 0x90;
 
-        public List<SubModel> SubModels { get; }
+        private SubModelHeader[] _subModels;
+        public List<SubModel> SubModels => _subModels.Select(x => x.SubModel).ToList();
         public M4 MapModel { get; }
+
+        private byte[] _copy;
 
         private Mdlx(Stream stream)
         {
+            _copy = stream.SetPosition(ReservedArea).ReadBytes();
+            stream.Position = 0;
+
             var type = ReadMdlxType(stream);
             stream.Position = 0;
 
@@ -27,8 +34,28 @@ namespace OpenKh.Kh2
                     MapModel = ReadAsMap(new SubStream(stream, ReservedArea, stream.Length - ReservedArea));
                     break;
                 case Entity:
-                    SubModels = ReadAsModel(stream).ToList();
+                    _subModels = ReadAsModel(stream).ToArray();
                     break;
+            }
+        }
+
+        public void Write(Stream stream)
+        {
+            stream.Position = ReservedArea;
+            stream.Write(_copy, 0, _copy.Length);
+
+            stream.Position = 0x90;
+            BinaryMapping.WriteObject(stream, _subModels[0]);
+            for (int i = 0; i < _subModels[0].DmaChainCount; i++)
+            {
+                BinaryMapping.WriteObject(stream, _subModels[0].DmaChains[i]);
+            }
+            for (int i = 0; i < _subModels[0].DmaChainCount; i++)
+            {
+                foreach (var dmaVif in _subModels[0].SubModel.DmaVifs)
+                {
+                    WriteDmaChain(stream, _subModels[0].DmaChains[i], dmaVif);
+                }
             }
         }
 
